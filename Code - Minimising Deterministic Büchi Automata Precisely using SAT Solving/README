@@ -1,0 +1,30 @@
+********************************************************************
+* DBA Minimizer                                                    *
+* A tool set for minimizing deterministic Buechi automata          *
+* (C) 2010/2011 by Ruediger Ehlers, Saarland University            *
+********************************************************************
+
++-------------------------------------------------------------------+
+| 0. Installation                                                   |
++-------------------------------------------------------------------+
+After extracting the archive to a directory, run "make" in the
+"Minimizer" directory. 
+
++-------------------------------------------------------------------+
+| 1. History                                                        |
++-------------------------------------------------------------------+
+- March, 26th, 2010: Initial release
+- November, 10th, 2011: Bugfix - the "buechinizer" tool declared too
+  many input Rabin automata as being unconvertable to deterministic
+  Buechi automata. Also, now a simple minimization heuristic is
+  applied by the "minimize.py" script prior to the SAT solving. This
+  should typically lead to speed-ups in the overall minimization
+  process.
+- November, 25th, 2011: Bugfix in the minimization heuristic that
+  is applied prior to SAT solving.
+
++-------------------------------------------------------------------+
+| 2. Usage & Details                                                |
++-------------------------------------------------------------------+
+Please gather the necessary information from the homepage of the
+tool set: http://react.cs.uni-saarland.de/tools/dbaminimizer
