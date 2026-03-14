@@ -17,14 +17,14 @@ class TGA:
     class State:
         def __init__(self, id: str):
             self.id = id
-            self.transitions : list[TGA.Transition] = []
+            self.transitions : dict[str, TGA.Transition] = {}
 
         def add_transition(self, symbol: str, target, acceptance_sets: set[int] = None):
             transition = TGA.Transition(self, symbol, target, acceptance_sets)
-            self.transitions.append(transition)
+            self.transitions.update({symbol: transition})
 
         def successors(self):
-            return [transition.target for transition in self.transitions]
+            return [transition.target for transition in self.transitions.values()]
 
         def __str__(self):
             return self.id
@@ -48,7 +48,7 @@ class TGA:
         on_stack = {}
         sccs = set()
 
-        def strong_connect(v):
+        def strong_connect(v : State):
             nonlocal index_counter
             index[v] = lowlink[v] = index_counter
             index_counter += 1
@@ -90,7 +90,7 @@ class TGA:
     def __repr__(self):
         for state in self.states:
             print(f'{state.id}')
-            for transition in state.transitions:
+            for transition in state.transitions.values():
                 acceptance_info = f" (acceptance sets: {transition.acceptance_sets})" if transition.acceptance_sets else ""
                 print(f'  --{transition.symbol}--> {transition.target.id}{acceptance_info}')
 
