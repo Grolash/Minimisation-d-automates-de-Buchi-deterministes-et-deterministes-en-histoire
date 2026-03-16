@@ -19,7 +19,7 @@ class TGA:
             self.id = id
             self.transitions : dict[str, TGA.Transition] = {}
 
-        def add_transition(self, symbol: str, target, acceptance_sets: set[int] = None):
+        def add_transition(self, symbol: str, target: State, acceptance_sets: set[int] = None):
             transition = TGA.Transition(self, symbol, target, acceptance_sets)
             self.transitions.update({symbol: transition})
 
@@ -36,6 +36,9 @@ class TGA:
 
     def add_state(self, state: State):
         self.states.append(state)
+
+    def size(self):
+        return len(self.states)
 
     def scc(self):
         successors = {s : s.successors() for s in self.states}

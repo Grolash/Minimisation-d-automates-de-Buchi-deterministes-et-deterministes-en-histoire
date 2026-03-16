@@ -3,6 +3,8 @@ import copy
 from ortools.sat.python import cp_model
 from itertools import combinations
 
+from ortools.sat.python.cp_model import OPTIMAL
+
 from tga import TGA
 
 
@@ -11,7 +13,7 @@ def powerset(s):
 
 
 class TGBuchiMinimizationProblem:
-    def __init__(self, reference_tga: TGA, maxsize: int, maxsets: int, deterministic: bool = False):
+    def __init__(self, reference_tga: TGA, maxsize: int, maxsets: int, deterministic: bool = True):
         self.reference_tga = reference_tga
         self.candidate_tga = TGA()
         self.deterministic = deterministic
@@ -162,25 +164,68 @@ class TGBuchiMinimizationProblem:
                                                                                   self.candidate_transitions[
                                                                                       q2, symbol, q1])
 
+    def solve(self):
+        self.one()
+        self.two()
+        self.three()
+        self.four_and_five()
+        self.status = self.solver.solve(self.model)
+        return self.status
+
+    def get_solution(self):
+        if self.status == cp_model.OPTIMAL:
+            print("Solution found:")
+            for q1 in self.candidate_tga.states:
+                for symbol in self.reference_tga.alphabet:
+                    for q2 in self.candidate_tga.states:
+                        if self.solver.Value(self.candidate_transitions[q1, symbol, q2]) == 1:
+                            print(f"Transition: {q1.id} --{symbol}--> {q2.id}")
+                            acceptance_sets = []
+                            for acceptance_set in range(self.maxsets):
+                                if self.solver.Value(self.candidate_transition_acceptance_set_memberships[q1, symbol, q2, acceptance_set]) == 1:
+                                    acceptance_sets.append(acceptance_set)
+                            print(f"Acceptance sets: {acceptance_sets}")
+        else:
+            print("No solution found")
+
+def find_minimal_solution(reference_tga: TGA, deterministic: bool = True):
+    print("Original automaton size: ", reference_tga.size(), "")
+    maxsize = reference_tga.size()
+    maxsets = reference_tga.num_acceptance_sets
+    pass
+
+def solve_for(reference_tga: TGA, maxsize, maxsets, deterministic: bool = True):
+    if maxsize >= 1:
+        print("Solving for size: ", maxsize, "")
+        problem = TGBuchiMinimizationProblem(reference_tga, maxsize, maxsets, deterministic)
+        solution_exists = problem.solve()
+        if solution_exists:
+            print("Solution found for size: ", maxsize, "")
+            smaller_problem = solve_for(reference_tga, maxsize-1, maxsets, deterministic)
+            if smaller_problem[0]:
+                return smaller_problem
+            else:
+                print("Minimal size found: ", maxsize, "")
+                return solution_exists, problem
+        print("No solution found for size: ", maxsize, "\nEnd of search.\n")
+        return False, None
+    else:
+        print("Reached invalid size 0.")
+        return False, None
 
 
 
 
 if __name__ == '__main__':
-    test_set = {1, 2, 3}
-    test_powerset = powerset(test_set)
-    print(test_powerset)
-    for i in test_powerset:
-        print(i, len(i))
-        for j in i:
-            print(j)
-    print(set([1, 2]) == frozenset([1, 2]))
-    print(set([2, 1]) == frozenset([1, 2]))
-    print(set([1, 2]) == frozenset([2, 1]))
-    print({1, 2} == frozenset([2, 1]))
-    print({1} == frozenset([1]))
-    print({1} == frozenset({1}))
-    a = {'a': 3, 'b': 2, 'c': 1}
-    b = {'g': 2, 'f': 1, 'e': 12, 'a': 1}
-    a.update(b)
-    print(a)
+    reference_tga = TGA()
+    q0 = TGA.State('q0')
+    q1 = TGA.State('q1')
+    q0.add_transition('a', q1, acceptance_sets={0,1})
+    q1.add_transition('b', q0, acceptance_sets={0,1})
+    q0.add_transition('b', q0, acceptance_sets={0})
+    q1.add_transition('a', q1, acceptance_sets={0})
+    reference_tga.add_state(q0)
+    reference_tga.add_state(q1)
+    reference_tga.alphabet = {'a', 'b'}
+    print(reference_tga.__repr__())
+    print(solve_for(reference_tga, 2, 2, deterministic=True)[1].get_solution())
