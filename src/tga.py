@@ -8,7 +8,7 @@ class TGA:
             self.symbol = symbol
             self.target = target # TGA.State
             # Which acceptance sets this transition belongs to (e.g. {0, 2})
-            self.acceptance_sets: set[int] = acceptance_sets or set() # Acc(q_1', l, q_2')
+            self.acceptance_sets: frozenset[int] = acceptance_sets or frozenset() # Acc(q_1', l, q_2')
 
         def __repr__(self):
             return (f'{self.source.id} --{self.symbol}--> {self.target.id}: '
