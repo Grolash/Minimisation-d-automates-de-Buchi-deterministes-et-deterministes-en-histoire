@@ -1,4 +1,4 @@
-class TGA:
+class NTGA:
     class Transition:
         def __init__(self, source, symbol: str, target, acceptance_sets: set[int] = None):
             self.source = source # TGA.State
@@ -14,20 +14,20 @@ class TGA:
     class State:
         def __init__(self, id: str):
             self.id = id
-            self.transitions : dict[str, TGA.Transition] = {}
+            self.transitions : dict[str, list[NTGA.Transition]] = {}
 
         def add_transition(self, symbol: str, target, acceptance_sets: set[int] = None):
-            transition = TGA.Transition(self, symbol, target, acceptance_sets)
-            self.transitions.update({symbol: transition})
+            transition = NTGA.Transition(self, symbol, target, acceptance_sets)
+            self.transitions[symbol].append(transition)
 
         def successors(self):
-            return [transition.target for transition in self.transitions.values()]
+            return [transition.target for transitionlist in self.transitions.values() for transition in transitionlist]
 
         def __str__(self):
             return self.id
 
     def __init__(self, num_acceptance_sets: int = 1):
-        self.states : list[TGA.State] = []
+        self.states : list[NTGA.State] = []
         self.alphabet : set[str] = set()
         self.num_acceptance_sets : int = num_acceptance_sets
 
@@ -90,9 +90,10 @@ class TGA:
     def __repr__(self):
         for state in self.states:
             print(f'{state.id}')
-            for transition in state.transitions.values():
-                acceptance_info = f" (acceptance sets: {transition.acceptance_sets})" if transition.acceptance_sets else ""
-                print(f'  --{transition.symbol}--> {transition.target.id}{acceptance_info}')
+            for transitionlist in state.transitions.values():
+                for transition in transitionlist:
+                    acceptance_info = f" (acceptance sets: {transition.acceptance_sets})" if transition.acceptance_sets else ""
+                    print(f'  --{transition.symbol}--> {transition.target.id}{acceptance_info}')
 
 
 if __name__ == "__main__":
