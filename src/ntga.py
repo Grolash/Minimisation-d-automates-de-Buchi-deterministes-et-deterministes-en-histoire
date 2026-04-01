@@ -21,7 +21,7 @@ class NTGA:
             self.transitions[symbol].append(transition)
 
         def successors(self):
-            return [transition.target for transitionlist in self.transitions.values() for transition in transitionlist]
+            return list(set(transition.target for transitionlist in self.transitions.values() for transition in transitionlist))
 
         def __str__(self):
             return self.id
