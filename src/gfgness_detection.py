@@ -2,19 +2,17 @@ from itertools import combinations
 
 from ortools.sat.python import cp_model
 
-from src.ntga import NTGA
+from src.nga import NGA
 
 
 def powerset(s):
     return frozenset(frozenset(comb) for r in range(len(s) + 1) for comb in combinations(s, r))
 
 class Game:
-    def __init__(self, reference_ntga : NTGA, maxtokens):
+    def __init__(self, reference_ntga : NGA, maxtokens):
         self.reference_ntga = reference_ntga
         self.maxtokens = maxtokens
         self.model = cp_model.CpModel()
-        self.f_r = frozenset(range(reference_ntga.num_acceptance_sets))
-        self.fs = powerset(self.f_r)
 
         self.position_variables = {}
         self.strategy_variables = {}
@@ -28,12 +26,19 @@ class Game:
                         self.position_variables[(p, q1, q2, a, "Adam")] = self.model.new_bool_var(f'position_{p.id}_{q1.id}_{q2.id}_{a}_{"Adam"}')
                         self.position_variables[(p, q1, q2, a, "Eve")] = self.model.new_bool_var(f'position_{p.id}_{q1.id}_{q2.id}_{a}_{"Eve"}')
                         transitions = p.transitions.get(a, [])
-                        for transition in transitions:
-                            self.strategy_variables[(p, q1, q2, a, transition.target)] = self.model.new_bool_var(f'strategy_{p.id}_{q1.id}_{q2.id}_{a}_{transition.target.id}')
-                    for f1 in self.fs:
-                        for f2 in self.fs:
-                            for f3 in self.fs:
-                                self.path_variables[(p, q1, q2, f1, f2, f3)] = self.model.new_bool_var(f'path_{p.id}_{q1.id}_{q2.id}_{f1}_{f2}_{f3}')
+                        for state in transitions:
+                            self.strategy_variables[(p, q1, q2, a, state)] = self.model.new_bool_var(f'strategy_{p.id}_{q1.id}_{q2.id}_{a}_{state.id}')
+                    q1_primes = p.transitions.get(a, [])
+                    for q1_prime in q1_primes:
+                        q2_primes = p.transitions.get(a, [])
+                        for q2_prime in q2_primes:
+                            p_primes = p.transitions.get(a, [])
+                            for p_prime in p_primes:
+                                self.path_variables[(p, p_prime, q1, q1_prime, q2, q2_prime)] = self.model.new_bool_var(f'path_{p.id}_{p_prime.id}_{q1.id}_{q1_prime.id}_{q2.id}_{q2_prime.id}')
+        self.rank = {}
+        self.solver = cp_model.CpSolver()
+        self.status = None
+
 
 
     """
@@ -44,9 +49,9 @@ class Game:
             for q1 in self.reference_ntga.states:
                 for q2 in self.reference_ntga.states:
                     for a in self.reference_ntga.alphabet:
-                        transitions = p.transitions.get(a, [])
-                        if len(transitions) > 0:
-                            self.model.add_exactly_one(self.strategy_variables[(p, q1, q2, a, transition.target)] for transition in transitions)
+                        states = p.transitions.get(a, [])
+                        if len(states) > 0:
+                            self.model.add_exactly_one(self.strategy_variables[(p, q1, q2, a, state)] for state in states)
 
     """
     Eve chooses the transition given by her strategy for symbol a at position p; transition.target is p' in formula
@@ -58,12 +63,13 @@ class Game:
             for q1 in self.reference_ntga.states:
                 for q2 in self.reference_ntga.states:
                     for a in self.reference_ntga.alphabet:
-                        transitions = p.transitions.get(a, [])
-                        for transition in transitions:
-                            self.model.add(self.position_variables[(transition.target, q1, q2, a, "Adam")] == True).only_enforce_if(
+                        p_primes = p.transitions.get(a, [])
+                        for p_prime in p_primes:
+                            self.model.add(self.position_variables[(p_prime, q1, q2, a, "Adam")] == True).only_enforce_if(
                                 self.position_variables[(p, q1, q2, a, "Eve")],
-                                self.strategy_variables[(p, q1, q2, a, transition.target)]
+                                self.strategy_variables[(p, q1, q2, a, p_prime)]
                             )
+                            self.rank[p_prime, q1, q2] = max(self.rank[p, q1, q2], 2 if p_prime.is_accepting else 0)
 
 
     """
@@ -87,74 +93,94 @@ class Game:
             a_variables.append(self.position_variables[(start_state, start_state, start_state, a, "Eve")])
         self.model.add_exactly_one(a_variables) # Adam chooses a starting letter
 
-        eve_variables = []
         for p in self.reference_ntga.states:
             for a in self.reference_ntga.alphabet:
                 for q1 in self.reference_ntga.states:
-                    q1_primes_transitions = p.transitions.get(a, [])
-                    for q1_prime_transition in q1_primes_transitions:
-                        q1_prime = q1_prime_transition.target
+                    q1_primes = q1.transitions.get(a, [])
+                    for q1_prime in q1_primes:
                         for q2 in self.reference_ntga.states:
-                            q2_primes_transitions = p.transitions.get(a, [])
-                            for q2_prime_transition in q2_primes_transitions:
-                                q2_prime = q2_prime_transition.target
+                            q2_primes = q2.transitions.get(a, [])
+                            for q2_prime in q2_primes:
                                 for b in self.reference_ntga.alphabet:
                                     position_variable = self.position_variables[(p, q1_prime, q2_prime, b, "Eve")]
-                                    eve_variables.append(position_variable)
-                                    self.model.add(position_variable == False).only_enforce_if(
-                                        self.position_variables[(p, q1, q2, a, "Adam")].Not()
+                                    self.model.add(position_variable == True).only_enforce_if(
+                                        self.position_variables[(p, q1, q2, a, "Adam")]
                                     )
-        self.model.add_exactly_one(eve_variables)
+                                self.rank[p, q1_prime, q2_prime] = max(self.rank[p, q1, q2], 1 if (q1.is_accepting or q2.is_accepting) else 0)
 
     """
-    computing path acceptance set transitively
+    computing paths
     """
     def pathing(self):
         self.model.add(self.path_variables[(self.reference_ntga.states[0], self.reference_ntga.states[0],
-                                            self.reference_ntga.states[0], frozenset(), frozenset(),
-                                            frozenset())] == True)
+                                            self.reference_ntga.states[0], self.reference_ntga.states[0],
+                                            self.reference_ntga.states[0], self.reference_ntga.states[0])] == True)
 
         for a in self.reference_ntga.alphabet:
-            for p in self.reference_ntga.states:
-                p_transitions = p.transitions.get(a, [])
-                for p_transition in p_transitions:
-                    p_prime = p_transition.target
-                    p_transition_acceptance_sets = p_transition.acceptance_sets
-                    for q1 in self.reference_ntga.states:
-                        for q2 in self.reference_ntga.states:
-                            for f1 in self.fs:
-                                for f2 in self.fs:
-                                    for f3 in self.fs:
-                                        self.model.add(self.path_variables[(p_prime, q1, q2, frozenset(
-                                            f1.union(p_transition_acceptance_sets)), f2, f3)] == True).only_enforce_if(
-                                            self.path_variables[(p, q1, q2, f1, f2, f3)],
-                                            self.position_variables[(p, q1, q2, a, "Eve")],
-                                            self.position_variables[(p_prime, q1, q2, a, "Adam")]
+            for q1 in self.reference_ntga.states:
+                for q1_prime in self.reference_ntga.states:
+                    for q2 in self.reference_ntga.states:
+                        for q2_prime in self.reference_ntga.states:
+                            for p in self.reference_ntga.states:
+                                for p_prime in self.reference_ntga.states:
+                                    for p_seconde in self.reference_ntga.states:
+                                        self.model.add(self.path_variables[(p, p_seconde, q1, q1_prime, q2, q2_prime)] == True).only_enforce_if(
+                                            self.path_variables[(p, p_prime, q1, q1_prime, q2, q2_prime)],
+                                            self.position_variables[(p_prime, q1_prime, q2_prime, a, "Eve")],
+                                            self.position_variables[(p_seconde, q1_prime, q2_prime, a, "Adam")]
                                         )
+                                    for q1_seconde in self.reference_ntga.states:
+                                        for q2_seconde in self.reference_ntga.states:
+                                            for b in self.reference_ntga.alphabet:
+                                                self.model.add(self.path_variables[(p, p_prime, q1, q1_seconde, q2, q2_seconde)] == True).only_enforce_if(
+                                                    self.path_variables[(p, p_prime, q1, q1_prime, q2, q2_prime)],
+                                                    self.position_variables[(p_prime, q1_prime, q2_prime, a, "Adam")],
+                                                    self.position_variables[(p_prime, q1_seconde, q2_seconde, b, "Eve")]
+                                                )
 
+    def cycle_closing(self):
+        for a in self.reference_ntga.alphabet:
+            for q1 in self.reference_ntga.states:
+                for q1_prime in self.reference_ntga.states:
+                    for q2 in self.reference_ntga.states:
+                        for q2_prime in self.reference_ntga.states:
+                            for p in self.reference_ntga.states:
+                                for p_prime in self.reference_ntga.states:
+                                    self.model.add(self.rank[p, q1_prime, q2_prime] == 2 or self.rank[p, q1_prime, q2_prime] == 0).only_enforce_if(
+                                        self.path_variables[(p, p_prime, q1, q1_prime, q2, q2_prime)],
+                                        self.position_variables[(p_prime, q1_prime, q2_prime, a, "Eve")],
+                                        self.position_variables[(p, q1_prime, q2_prime, a, "Adam")]
+                                    )
+
+    def solve(self):
+        self.strategy_choice()
+        self.eve_adam_sequence()
+        self.adam_eve_sequence()
+        self.pathing()
+        self.cycle_closing()
+        self.status = self.solver.Solve(self.model)
+        return self.status == cp_model.OPTIMAL
+
+    def get_solution(self):
+        if self.status == cp_model.OPTIMAL:
+            print("Solution found:")
+            for p in self.reference_ntga.states:
                 for q1 in self.reference_ntga.states:
-                    q1_transitions = p.transitions.get(a, [])
-                    for q1_transition in q1_transitions:
-                        q1_prime = q1_transition.target
-                        q1_transition_acceptance_sets = q1_transition.acceptance_sets
-                        for q2 in self.reference_ntga.states:
-                            q2_transitions = p.transitions.get(a, [])
-                            for q2_transition in q2_transitions:
-                                q2_prime = q2_transition.target
-                                q2_transition_acceptance_sets = q2_transition.acceptance_sets
-                                for f1 in self.fs:
-                                    for f2 in self.fs:
-                                        for f3 in self.fs:
-                                            self.model.add(self.path_variables[(p, q1_prime, q2_prime, f1,
-                                                                                frozenset(f2.union(q1_transition_acceptance_sets)),
-                                                                                frozenset(f3.union(q2_transition_acceptance_sets)))]
-                                                           == True).only_enforce_if(
-                                                self.path_variables[(p, q1, q2, f1, f2, f3)],
-                                                self.position_variables[(p, q1, q2, a, "Adam")],
-                                                self.position_variables[(p, q1_prime, q2_prime, a, "Eve")],
-                                            )
+                    for q2 in self.reference_ntga.states:
+                        for a in self.reference_ntga.alphabet:
+                            if self.solver.Value(self.position_variables[(p, q1, q2, a, "Adam")]) == 1:
+                                print(f"Position: --{a}--> {p.id} {q1.id} {q2.id} (Adam)")
+                            if self.solver.Value(self.position_variables[(p, q1, q2, a, "Eve")]) == 1:
+                                print(f"Position: --{a}--> {p.id} {q1.id} {q2.id} (Eve)")
+            for p in self.reference_ntga.states:
+                for q1 in self.reference_ntga.states:
+                    for q2 in self.reference_ntga.states:
+                        print(f"Rank: {p.id} {q1.id} {q2.id} = {self.solver.Value(self.rank_variables[(p, q1, q2)])}")
 
-    # TODO: close path and determine max rank of cycle: 2 if f1 = f_r, 1 if f2 = f_r or f3 = f_r, 0 otherwise
+
+if __name__ == "__main__":
+    pass
+
 
 
 
