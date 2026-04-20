@@ -1,18 +1,21 @@
-class NGA:
+class NA:
     class State:
         def __init__(self, id: str):
             self.id : str = id
-            self.transitions : dict[str, list[NGA.State]] = {}
+            self.transitions : dict[str, list[NA.State]] = {}
             self.is_accepting : bool = False
 
         def add_transition(self, symbol: str, target):
-            self.transitions[symbol].append(target)
+            if symbol in self.transitions.keys():
+                self.transitions[symbol].append(target)
+            else:
+                self.transitions[symbol] = [target]
 
         def __str__(self):
             return self.id
 
     def __init__(self):
-        self.states : list[NGA.State] = []
+        self.states : list[NA.State] = []
         self.alphabet : set[str] = set()
 
     def add_state(self, state: State):
@@ -35,11 +38,11 @@ class NGA:
 
 
 if __name__ == "__main__":
-    reference_automaton = NGA()
-    q0 = NGA.State('q0')
-    q1 = NGA.State('q1')
-    q2 = NGA.State('q2')
-    q3 = NGA.State('q3')
+    reference_automaton = NA()
+    q0 = NA.State('q0')
+    q1 = NA.State('q1')
+    q2 = NA.State('q2')
+    q3 = NA.State('q3')
     q0.is_accepting = True
     q1.is_accepting = True
     q0.add_transition('a', q1)
