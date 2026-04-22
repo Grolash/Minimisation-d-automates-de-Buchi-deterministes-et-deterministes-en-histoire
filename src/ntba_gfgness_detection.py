@@ -78,18 +78,16 @@ class Game:
                             )
 
     """
-    Adam chooses a starting letter a and the Eve tuple (q0, q0, q0, a, Eve) is true for that a;
-    => considering, for all symbols a in Alphabet, the (q0, q0, q0, a, Eve) position variables, exactly one is true.
+    Adam 'chooses' a starting letter a and the Eve tuple (q0, q0, q0, a, Eve) is true for a;
 
-    Adam chooses a q1' and a q2' such that they are reachable from, respectively, q1 and q2 by letter a,
-    and (p, q1, q2, a, Eve) is true.
-    Adam also chooses a letter b.
+    Adam 'chooses' a q1' and a q2' such that they are reachable from, respectively, q1 and q2 by letter a,
+    and (p, q1, q2, a, Adam) is true.
+    Adam also 'chooses' a letter b.
     => for all p, q1, q2 in Q, and a in Alphabet,
     for all q1', q2' reachable from q1 and q2 respectively by letter a,
     for all b in Alphabet,
-    among all (p, q1', q2', b, Eve) tuples, exactly one is true.
-    If the (p, q1, q2, a, Adam) tuple is false, then (p, q1', q2', b, Eve) is false;
-    i.e., the (p, q1', q2', b, Eve) chosen to be true is among the ones with (p, q1, q2, a, Adam) true.
+    all (p, q1', q2', b, Eve) tuples are true.
+    If the (p, q1, q2, a, Adam) tuple is false, then (p, q1', q2', b, Eve) is false.
     """
     def adam_eve_sequence(self):
         start_state = self.nta.states[0]
@@ -125,7 +123,6 @@ class Game:
         self.model.add(self.path_variables[(self.nta.states[0], self.nta.states[0],
                                             self.nta.states[0], self.nta.states[0],
                                             self.nta.states[0], self.nta.states[0])] == True)
-
 
         for a in self.nta.alphabet:
             for q1 in self.nta.states:
