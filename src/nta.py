@@ -32,13 +32,22 @@ class NTA:
     def __init__(self, num_acceptance_sets: int = 1):
         self.states : list[NTA.State] = []
         self.alphabet : set[str] = set()
-        self.num_acceptance_sets : int = num_acceptance_sets
 
     def add_state(self, state: State):
         self.states.append(state)
 
     def size(self):
         return len(self.states)
+
+    def complete(self):
+        dump_state = NTA.State('dump')
+        self.add_state(dump_state)
+        for state in self.states:
+            for symbol in self.alphabet:
+                transitions = state.transitions.get(symbol, [])
+                if len(transitions) == 0:
+                    state.add_transition(symbol, dump_state)
+
 
     def __str__(self):
         return str(self.states)
