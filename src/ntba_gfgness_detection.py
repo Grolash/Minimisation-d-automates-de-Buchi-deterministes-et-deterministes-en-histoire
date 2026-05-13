@@ -32,7 +32,6 @@ class Game:
             for q1 in self.nta.states
             for q2 in self.nta.states
         }
-        self.win = self.model.new_bool_var('win')
 
         self.solver = cp_model.CpSolver()
         self.status = None
@@ -132,12 +131,11 @@ class Game:
                             for p in self.nta.states:
                                 for p_prime in self.nta.states:
                                     for p_seconde in p_prime.transitions.get(a, []):
-                                        if p_seconde.target != p:
-                                            self.model.add(self.path_variables[(p, p_seconde.target, q1, q1_prime, q2, q2_prime)] == True).only_enforce_if(
-                                                self.path_variables[(p, p_prime, q1, q1_prime, q2, q2_prime)],
-                                                self.position_variables[(p_prime, q1_prime, q2_prime, a, "Eve")],
-                                                self.position_variables[(p_seconde.target, q1_prime, q2_prime, a, "Adam")]
-                                            )
+                                        self.model.add(self.path_variables[(p, p_seconde.target, q1, q1_prime, q2, q2_prime)] == True).only_enforce_if(
+                                            self.path_variables[(p, p_prime, q1, q1_prime, q2, q2_prime)],
+                                            self.position_variables[(p_prime, q1_prime, q2_prime, a, "Eve")],
+                                            self.position_variables[(p_seconde.target, q1_prime, q2_prime, a, "Adam")]
+                                        )
         for a in self.nta.alphabet:
             for q1 in self.nta.states:
                 for q1_prime in self.nta.states:
@@ -168,14 +166,14 @@ class Game:
                         for q2_prime in self.nta.states:
                             for p in self.nta.states:
                                 for p_prime in self.nta.states:
-                                    rank = self.rank[(p, q1_prime, q2_prime)]
+                                    for b in self.nta.alphabet:
+                                        rank = self.rank[(p, q1, q2)]
 
-                                    literals = (self.path_variables[(p, p_prime, q1, q1_prime, q2, q2_prime)],
-                                            self.position_variables[(p_prime, q1_prime, q2_prime, a, "Eve")],
-                                            self.position_variables[(p, q1_prime, q2_prime, a, "Adam")])
+                                        literals = (self.path_variables[(p, p, q1, q1_prime, q2, q2_prime)],
+                                                self.position_variables[(p, q1_prime, q2_prime, b, "Adam")],
+                                                self.position_variables[(p, q1, q2, a, "Eve")])
 
-                                    if rank == 0 or rank == 2:
-                                        self.model.add(self.win == True).only_enforce_if(
+                                        self.model.add(rank != 1).only_enforce_if(
                                             literals,
                                         )
 
@@ -191,7 +189,6 @@ class Game:
     def get_solution(self):
         if self.status == cp_model.OPTIMAL:
             print("Solution found:")
-            print(f"Win: {self.solver.Value(self.win)}")
             for p in self.nta.states:
                 for q1 in self.nta.states:
                     for q2 in self.nta.states:
@@ -204,7 +201,6 @@ class Game:
                                 print(f"Position: --{a}--> {p.id} {q1.id} {q2.id} (Eve)")
                                 print(
                                     f"Rank: {p.id} {q1.id} {q2.id} = {self.solver.Value(self.rank[(p, q1, q2)])}")
-            print(f"Win: {self.solver.Value(self.win)}")
         else:
             print("No solution found")
 
