@@ -91,8 +91,7 @@ class Game:
             for q1 in self.nta.states:
                 for q2 in self.nta.states:
                     for a in self.nta.alphabet:
-                        path_variables = [self.path_variables[(p, q1, q2, p, q1, q2, x)] for x in range(3)]
-                        self.model.add_exactly_one(path_variables).only_enforce_if(
+                        self.model.add_exactly_one(self.path_variables[(p, q1, q2, p, q1, q2, 0)]).only_enforce_if(
                             self.position_variables[(p, q1, q2, a, "Eve")])
 
         for a in self.nta.alphabet:
@@ -181,7 +180,7 @@ class Game:
                                     for p_prime in self.nta.states:
                                         for n in range(2):
                                             literals = (
-                                                self.path_variables[(p, q1, q2, p_prime, q1_prime, q2_prime, n)],
+                                                self.path_variables[(p, q1, q2, p, q1_prime, q2_prime, n)],
                                                 self.position_variables[(p, q1_prime, q2_prime, a, "Adam")],
                                                 self.position_variables[(p, q1, q2, b, "Eve")])
 
@@ -189,6 +188,8 @@ class Game:
                                                                (p, q1, q2, p, q1, q2, 1)] == False).only_enforce_if(
                                                 literals
                                             )
+
+
 
     def solve(self):
         self.eve_adam_sequence()
