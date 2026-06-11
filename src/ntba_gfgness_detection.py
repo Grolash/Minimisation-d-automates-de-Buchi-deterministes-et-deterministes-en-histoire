@@ -256,6 +256,11 @@ if __name__ == "__main__":
     GFG_nta.add_state(b_seconde)
     GFG_nta.complete()
 
+    print("GFG NTA:")
+    game1 = Game(GFG_nta)
+    game1.solve()
+    game1.get_solution()
+
     non_GFG_nta = NTA()
     non_GFG_nta.alphabet = {'a', 'b'}
     p = NTA.State('p')
@@ -269,7 +274,7 @@ if __name__ == "__main__":
     non_GFG_nta.add_state(q)
     non_GFG_nta.complete()
 
-
-    game = Game(non_GFG_nta)
-    game.solve()
-    game.get_solution()
+    print("Non-GFG NTA:")
+    game2 = Game(non_GFG_nta)
+    game2.solve()
+    game2.get_solution()
