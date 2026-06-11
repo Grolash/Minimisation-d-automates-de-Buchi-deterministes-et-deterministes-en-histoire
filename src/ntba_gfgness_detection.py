@@ -173,21 +173,10 @@ class Game:
         for a in self.nta.alphabet:
             for b in self.nta.alphabet:
                 for q1 in self.nta.states:
-                    for q1_prime in self.nta.states:
-                        for q2 in self.nta.states:
-                            for q2_prime in self.nta.states:
-                                for p in self.nta.states:
-                                    for p_prime in self.nta.states:
-                                        for n in range(2):
-                                            literals = (
-                                                self.path_variables[(p, q1, q2, p, q1_prime, q2_prime, n)],
-                                                self.position_variables[(p, q1_prime, q2_prime, a, "Adam")],
-                                                self.position_variables[(p, q1, q2, b, "Eve")])
-
-                                            self.model.add(self.path_variables[
-                                                               (p, q1, q2, p, q1, q2, 1)] == False).only_enforce_if(
-                                                literals
-                                            )
+                    for q2 in self.nta.states:
+                        for p in self.nta.states:
+                            self.model.add(self.path_variables[
+                               (p, q1, q2, p, q1, q2, 1)] == False)
 
 
 
