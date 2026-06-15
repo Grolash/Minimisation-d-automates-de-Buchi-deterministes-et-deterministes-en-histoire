@@ -18,6 +18,10 @@ class Game:
                             f'position_{p.id}_{q1.id}_{q2.id}_{a}_{"Adam"}')
                         self.position_variables[(p, q1, q2, a, "Eve")] = self.model.new_bool_var(
                             f'position_{p.id}_{q1.id}_{q2.id}_{a}_{"Eve"}')
+                        p_primes: list[NTA.Transition] = p.transitions.get(a, [])
+                        for p_prime in p_primes:
+                            self.strategy_variables[(p, q1, q2, a, p_prime.target)] = self.model.new_bool_var(
+                                f'strategy_{p.id}_{q1.id}_{q2.id}_{a}_{p_prime.target.id}')
                     for q1_prime in self.nta.states:
                         for q2_prime in self.nta.states:
                             for p_prime in self.nta.states:
@@ -34,6 +38,15 @@ class Game:
         self.solver = cp_model.CpSolver()
         self.status = None
 
+    def eve_strategy(self):
+        for p in self.nta.states:
+            for a in self.nta.alphabet:
+                for q1 in self.nta.states:
+                    for q2 in self.nta.states:
+                        p_primes: list[NTA.Transition] = p.transitions.get(a, [])
+                        strategy_variables = [self.strategy_variables[(p, q1, q2, a, p_prime.target)] for p_prime in p_primes]
+                        self.model.add_exactly_one(strategy_variables)
+
     """
     Eve chooses the transition given by her strategy for symbol a at position p; transition.target is p' in formula
     => p' = strategy(p, q1, q2, a); i.e., strategy(p, q1, q2, a, p') = True
@@ -45,10 +58,12 @@ class Game:
                 for q2 in self.nta.states:
                     for a in self.nta.alphabet:
                         p_primes = p.transitions.get(a, [])
-                        position_variables = [self.position_variables[(p_prime.target, q1, q2, a, "Adam")] for p_prime
-                                              in p_primes]
-                        self.model.add_exactly_one(position_variables).only_enforce_if(
-                            self.position_variables[(p, q1, q2, a, "Eve")])
+                        for p_prime in p_primes:
+                            self.model.add(self.position_variables[(p_prime.target, q1, q2, a, "Adam")] == True).only_enforce_if(
+                                self.position_variables[(p, q1, q2, a, "Eve")],
+                                self.strategy_variables[(p, q1, q2, a, p_prime.target)]
+                            )
+
 
     """
     Adam 'chooses' a starting letter a and the Eve tuple (q0, q0, q0, a, Eve) is true for a;
@@ -181,6 +196,7 @@ class Game:
 
 
     def solve(self):
+        self.eve_strategy()
         self.eve_adam_sequence()
         self.adam_eve_sequence()
         self.pathing()
