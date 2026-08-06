@@ -8,32 +8,36 @@ class Game:
         self.model = cp_model.CpModel()
 
         self.position_variables = {}
-        self.strategy_variables = {}
+        self.edge_variables = {}
         self.path_variables = {}
         for p in self.nta.states:
             for q1 in self.nta.states:
                 for q2 in self.nta.states:
                     for a in self.nta.alphabet:
                         self.position_variables[(p, q1, q2, a, "Adam")] = self.model.new_bool_var(
-                            f'position_{p.id}_{q1.id}_{q2.id}_{a}_{"Adam"}')
+                            '')
                         self.position_variables[(p, q1, q2, a, "Eve")] = self.model.new_bool_var(
-                            f'position_{p.id}_{q1.id}_{q2.id}_{a}_{"Eve"}')
+                            '')
                         p_primes: list[NTA.Transition] = p.transitions.get(a, [])
                         for p_prime in p_primes:
-                            self.strategy_variables[(p, q1, q2, a, p_prime.target)] = self.model.new_bool_var(
-                                f'strategy_{p.id}_{q1.id}_{q2.id}_{a}_{p_prime.target.id}')
+                            self.edge_variables[(p, q1, q2, a, "Eve", p_prime.target)] = self.model.new_bool_var(
+                                ''
+                                )
                     for q1_prime in self.nta.states:
                         for q2_prime in self.nta.states:
                             for p_prime in self.nta.states:
-                                self.path_variables[
-                                    (p, q1, q2, p_prime, q1_prime, q2_prime, 0)] = self.model.new_bool_var(
-                                    f'path_{p.id}_{q1.id}_{q2.id}_{p_prime.id}_{q1_prime.id}_{q2_prime.id}_{0}')
-                                self.path_variables[
-                                    (p, q1, q2, p_prime, q1_prime, q2_prime, 1)] = self.model.new_bool_var(
-                                    f'path_{p.id}_{q1.id}_{q2.id}_{p_prime.id}_{q1_prime.id}_{q2_prime.id}_{1}')
-                                self.path_variables[
-                                    (p, q1, q2, p_prime, q1_prime, q2_prime, 2)] = self.model.new_bool_var(
-                                    f'path_{p.id}_{q1.id}_{q2.id}_{p_prime.id}_{q1_prime.id}_{q2_prime.id}_{2}')
+                                for a in self.nta.alphabet:
+                                    for b in self.nta.alphabet:
+                                        for player in ["Adam", "Eve"]:
+                                            self.path_variables[
+                                                (p, q1, q2, a, p_prime, q1_prime, q2_prime, b, player, 0)] = self.model.new_bool_var(
+                                                '')
+                                            self.path_variables[
+                                                (p, q1, q2, a, p_prime, q1_prime, q2_prime, b, player, 1)] = self.model.new_bool_var(
+                                                '')
+                                            self.path_variables[
+                                                (p, q1, q2, a, p_prime, q1_prime, q2_prime, b, player, 2)] = self.model.new_bool_var(
+                                                '')
 
         self.solver = cp_model.CpSolver()
         self.status = None
@@ -44,8 +48,8 @@ class Game:
                 for q1 in self.nta.states:
                     for q2 in self.nta.states:
                         p_primes: list[NTA.Transition] = p.transitions.get(a, [])
-                        strategy_variables = [self.strategy_variables[(p, q1, q2, a, p_prime.target)] for p_prime in p_primes]
-                        self.model.add_exactly_one(strategy_variables)
+                        strategy_variables = [self.edge_variables[(p, q1, q2, a, "Eve", p_prime.target)] for p_prime in p_primes]
+                        self.model.add_exactly_one(strategy_variables).only_enforce_if(self.position_variables[(p, q1, q2, a, "Eve")])
 
     """
     Eve chooses the transition given by her strategy for symbol a at position p; transition.target is p' in formula
@@ -60,8 +64,7 @@ class Game:
                         p_primes = p.transitions.get(a, [])
                         for p_prime in p_primes:
                             self.model.add(self.position_variables[(p_prime.target, q1, q2, a, "Adam")] == True).only_enforce_if(
-                                self.position_variables[(p, q1, q2, a, "Eve")],
-                                self.strategy_variables[(p, q1, q2, a, p_prime.target)]
+                                self.edge_variables[(p, q1, q2, a, "Eve", p_prime.target)]
                             )
 
 
@@ -94,9 +97,7 @@ class Game:
                                     position_variable = self.position_variables[
                                         (p, q1_prime.target, q2_prime.target, b, "Eve")]
 
-                                    self.model.add(position_variable == True).only_enforce_if(
-                                        self.position_variables[(p, q1, q2, a, "Adam")]
-                                    )
+                                    self.model.add(position_variable == True).only_enforce_if(self.position_variables[(p, q1, q2, a, "Adam")])
 
     """
     computing paths
@@ -106,7 +107,7 @@ class Game:
             for q1 in self.nta.states:
                 for q2 in self.nta.states:
                     for a in self.nta.alphabet:
-                        self.model.add_exactly_one(self.path_variables[(p, q1, q2, p, q1, q2, 0)]).only_enforce_if(
+                        self.model.add(self.path_variables[(p, q1, q2, a, p, q1, q2, a, "Eve", 0)] == True).only_enforce_if(
                             self.position_variables[(p, q1, q2, a, "Eve")])
 
         for a in self.nta.alphabet:
@@ -117,24 +118,25 @@ class Game:
                             for p in self.nta.states:
                                 for p_prime in self.nta.states:
                                     for p_seconde in p_prime.transitions.get(a, []):
-                                        for n in range(3):
-                                            literals = [
-                                                self.path_variables[(p, q1, q2, p_prime, q1_prime, q2_prime, n)],
-                                                self.position_variables[(p_prime, q1_prime, q2_prime, a, "Eve")],
-                                                self.position_variables[
-                                                    (p_seconde.target, q1_prime, q2_prime, a, "Adam")]]
-                                            if p_seconde.is_accepting:
-                                                self.model.add(self.path_variables[
-                                                                   (p, q1, q2, p_seconde.target, q1_prime, q2_prime,
-                                                                    2)] == True).only_enforce_if(
-                                                    literals
-                                                )
-                                            else:
-                                                self.model.add(self.path_variables[
-                                                                   (p, q1, q2, p_seconde.target, q1_prime, q2_prime,
-                                                                    n)] == True).only_enforce_if(
-                                                    literals
-                                                )
+                                        for c in self.nta.alphabet:
+                                            for n in range(3):
+                                                literals = [
+                                                    self.path_variables[(p, q1, q2, c, p_prime, q1_prime, q2_prime, a, "Eve", n)],
+                                                    self.edge_variables[(p_prime, q1_prime, q2_prime, a, "Eve",
+                                                                         p_seconde.target)],
+                                                ]
+                                                if p_seconde.is_accepting:
+                                                    self.model.add(self.path_variables[
+                                                                       (p, q1, q2, c, p_seconde.target, q1_prime, q2_prime, a, "Adam",
+                                                                        2)] == True).only_enforce_if(
+                                                        literals
+                                                    )
+                                                else:
+                                                    self.model.add(self.path_variables[
+                                                                       (p, q1, q2, c, p_seconde.target, q1_prime, q2_prime, a, "Adam",
+                                                                        n)] == True).only_enforce_if(
+                                                        literals
+                                                    )
 
 
         for a in self.nta.alphabet:
@@ -145,53 +147,52 @@ class Game:
                             for q2_prime in self.nta.states:
                                 for p in self.nta.states:
                                     for p_prime in self.nta.states:
-                                        for q1_seconde in q1_prime.transitions.get("a", []):
-                                            for q2_seconde in q2_prime.transitions.get("a", []):
-                                                for n in range(2):
-                                                    literals = [self.path_variables[
-                                                                (p, q1, q2, p_prime, q1_prime, q2_prime, n)],
-                                                                self.position_variables[
-                                                                (p_prime, q1_prime, q2_prime, a, "Adam")],
-                                                                self.position_variables[
-                                                                    (p_prime, q1_seconde.target, q2_seconde.target, b,
-                                                                     "Eve")]]
+                                        for q1_seconde in q1_prime.transitions.get(a, []):
+                                            for q2_seconde in q2_prime.transitions.get(a, []):
+                                                for c in self.nta.alphabet:
+                                                    for n in range(2):
+                                                        literals = [self.path_variables[
+                                                                    (p, q1, q2, c, p_prime, q1_prime, q2_prime, a, "Adam", n)],
+                                                                    self.position_variables[(p_prime, q1_prime, q2_prime, a, "Adam")],
+                                                                    self.position_variables[(p_prime, q1_seconde.target, q2_seconde.target, b, "Eve")]
+                                                                    ]
 
-                                                    if q1_seconde.is_accepting or q2_seconde.is_accepting:
-                                                        self.model.add(self.path_variables[
-                                                                           (p, q1, q2, p_prime, q1_seconde.target,
-                                                                            q2_seconde.target,
-                                                                            1)] == True).only_enforce_if(
-                                                            literals
-                                                        )
-                                                    else:
-                                                        self.model.add(self.path_variables[
-                                                                           (p, q1, q2, p_prime, q1_seconde.target,
-                                                                            q2_seconde.target,
-                                                                            n)] == True).only_enforce_if(
-                                                            literals
-                                                        )
+                                                        if q1_seconde.is_accepting or q2_seconde.is_accepting:
+                                                            self.model.add(self.path_variables[
+                                                                               (p, q1, q2, c, p_prime, q1_seconde.target,
+                                                                                q2_seconde.target, b, "Eve",
+                                                                                1)] == True).only_enforce_if(
+                                                                literals,
 
-                                                self.model.add(self.path_variables[
-                                                                   (p, q1, q2, p_prime, q1_seconde.target,
-                                                                    q2_seconde.target,
-                                                                    2)] == True).only_enforce_if(
-                                                    self.path_variables[
-                                                        (p, q1, q2, p_prime, q1_prime, q2_prime, 2)],
-                                                    self.position_variables[
-                                                        (p_prime, q1_prime, q2_prime, a, "Adam")],
-                                                    self.position_variables[
-                                                        (p_prime, q1_seconde.target, q2_seconde.target, b, "Eve")]
-                                                )
+                                                            )
+                                                        else:
+                                                            self.model.add(self.path_variables[
+                                                                               (p, q1, q2, c, p_prime, q1_seconde.target,
+                                                                                q2_seconde.target, b, "Eve",
+                                                                                n)] == True).only_enforce_if(
+                                                                literals
+                                                            )
+
+                                                    self.model.add(self.path_variables[
+                                                                       (p, q1, q2, c, p_prime, q1_seconde.target,
+                                                                        q2_seconde.target, b, "Eve",
+                                                                        2)] == True).only_enforce_if(
+                                                        self.path_variables[
+                                                            (p, q1, q2, c, p_prime, q1_prime, q2_prime, a, "Adam", 2)],
+                                                        self.position_variables[
+                                                            (p_prime, q1_prime, q2_prime, a, "Adam")],
+                                                        self.position_variables[
+                                                            (p_prime, q1_seconde.target, q2_seconde.target, b, "Eve")]
+                                                    )
 
 
     def cycle_closing(self):
         for a in self.nta.alphabet:
-            for b in self.nta.alphabet:
-                for q1 in self.nta.states:
-                    for q2 in self.nta.states:
-                        for p in self.nta.states:
-                            self.model.add(self.path_variables[
-                               (p, q1, q2, p, q1, q2, 1)] == False)
+            for q1 in self.nta.states:
+                for q2 in self.nta.states:
+                    for p in self.nta.states:
+                        self.model.add(self.path_variables[
+                           (p, q1, q2, a, p, q1, q2, a, "Eve", 1)] == False)
 
 
 
@@ -211,27 +212,28 @@ class Game:
                 for q1 in self.nta.states:
                     for q2 in self.nta.states:
                         for a in self.nta.alphabet:
+                            if self.solver.Value(self.position_variables[(p, q1, q2, a, "Eve")]) == 1:
+                                print(f'Eve is at position ({p.id}, {q1.id}, {q2.id}), for symbol {a}')
+                            if self.solver.Value(self.position_variables[(p, q1, q2, a, "Adam")]) == 1:
+                                print(f'Adam is at position ({p.id}, {q1.id}, {q2.id}), for symbol {a}')
                             for p_prime in p.transitions.get(a, []):
                                 if self.solver.Value(
-                                    self.position_variables[(p, q1, q2, a, "Eve")]) == 1 and self.solver.Value(
-                                    self.position_variables[(p_prime.target, q1, q2, a, "Adam")]) == 1:
+                                    self.edge_variables[(p, q1, q2, a, "Eve", p_prime.target)]) == 1:
                                     print(f'At position ({p.id}, {q1.id}, {q2.id}), for symbol {a}, Eve chooses {p_prime.target.id}')
 
                             for q1_prime in q1.transitions.get(a, []):
                                 for q2_prime in q2.transitions.get(a, []):
-                                    if self.solver.Value(
-                                        self.position_variables[(p, q1, q2, a, "Adam")]
-                                        ) == 1 and self.solver.Value(
-                                        self.position_variables[(p, q1_prime.target, q2_prime.target, a, "Eve")]
-                                        ) == 1:
-                                        print(f'At position ({p.id}, {q1.id}, {q2.id}), for symbol {a}, Adam chooses {q1_prime.target.id} and {q2_prime.target.id}')
+                                    for b in self.nta.alphabet:
+                                        if self.solver.Value(
+                                                self.position_variables[(p, q1, q2, a, "Adam")]) == 1 and self.solver.Value(self.position_variables[(p, q1_prime.target, q2_prime.target, b, "Eve")]) == 1:
+                                            print(f'At position ({p.id}, {q1.id}, {q2.id}), for symbol {a}, Adam chooses {q1_prime.target.id} and {q2_prime.target.id} and {b}')
         else:
             print("No solution found")
 
 
 
 if __name__ == "__main__":
-    GFG_nta = NTA()
+    """GFG_nta = NTA()
     GFG_nta.alphabet = {'a', 'b', 'x'}
     i = NTA.State('i')
     a = NTA.State('a')
@@ -262,9 +264,38 @@ if __name__ == "__main__":
     GFG_nta.complete()
 
     print("GFG NTA:")
+    # GFG_nta.__repr__()
     game1 = Game(GFG_nta)
     game1.solve()
-    game1.get_solution()
+    game1.get_solution()"""
+
+    fake_nta = NTA()
+    # actually deterministic because I had no HD examples for this size
+    # every deterministic NTA is also HD
+    fake_nta.alphabet = {'a', 'b'}
+    q_0 = NTA.State('q_0')
+    q_1 = NTA.State('q_1')
+    q_2 = NTA.State('q_2')
+    q_3 = NTA.State('q_3')
+    fake_nta.add_state(q_0)
+    fake_nta.add_state(q_1)
+    fake_nta.add_state(q_2)
+    fake_nta.add_state(q_3)
+
+    q_0.add_transition('a', q_1, True)
+    q_0.add_transition('b', q_2)
+    q_1.add_transition('a', q_3)
+    q_1.add_transition('b', q_0, True)
+    q_2.add_transition('a', q_1, True)
+    q_2.add_transition('b', q_2)
+    q_3.add_transition('a', q_3)
+    q_3.add_transition('b', q_0, True)
+
+    fake_nta.complete()
+    print("Fake NTA:")
+    game = Game(fake_nta)
+    game.solve()
+    game.get_solution()
 
     non_GFG_nta = NTA()
     non_GFG_nta.alphabet = {'a', 'b'}
@@ -280,6 +311,7 @@ if __name__ == "__main__":
     non_GFG_nta.complete()
 
     print("Non-GFG NTA:")
+    # non_GFG_nta.__repr__()
     game2 = Game(non_GFG_nta)
     game2.solve()
     game2.get_solution()

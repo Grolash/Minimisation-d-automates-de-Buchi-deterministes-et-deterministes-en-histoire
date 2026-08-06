@@ -39,14 +39,31 @@ class NTA:
     def size(self):
         return len(self.states)
 
-    def complete(self):
-        dump_state = NTA.State('dump')
-        self.add_state(dump_state)
+    def completed(self):
         for state in self.states:
             for symbol in self.alphabet:
                 transitions = state.transitions.get(symbol, [])
                 if len(transitions) == 0:
-                    state.add_transition(symbol, dump_state)
+                    return False
+        return True
+
+    def complete(self):
+        if not self.completed():
+            dump_state = NTA.State('dump')
+            self.add_state(dump_state)
+            for state in self.states:
+                for symbol in self.alphabet:
+                    transitions = state.transitions.get(symbol, [])
+                    if len(transitions) == 0:
+                        state.add_transition(symbol, dump_state)
+
+    def get_transitions(self):
+        transitions = []
+        for state in self.states:
+            for transitionlist in state.transitions.values():
+                for transition in transitionlist:
+                    transitions.append(transition)
+        return transitions
 
 
     def __str__(self):
@@ -60,6 +77,77 @@ class NTA:
                     acceptance_info = " (accepting)" if transition.is_accepting else " (non-accepting)"
                     print(f'  --{transition.symbol}--> {transition.target.id}{acceptance_info}')
 
+    def to_na(self):
+        from na import NA
+
+        na = NA()
+        na.alphabet = self.alphabet.copy()
+
+        transition_to_state = {}
+        for transition in self.get_transitions():
+            state = NA.State(
+                f"{transition.source.id} -{transition.symbol}-> {transition.target.id}"
+            )
+            state.is_accepting = transition.is_accepting
+            transition_to_state[transition] = state
+            na.add_state(state)
+
+        initial = NA.State("init")
+        na.add_state(initial)
+        if len(self.states) == 0:
+            return na
+
+        nta_initial = self.states[0]
+        # Initial state's outgoing transitions
+        for symbol, transitions in nta_initial.transitions.items():
+            for transition in transitions:
+                initial.add_transition(symbol, transition_to_state[transition])
+
+        for transition in self.get_transitions():
+            current = transition_to_state[transition]
+            for symbol, next_transitions in transition.target.transitions.items():
+                for next_transition in next_transitions:
+                    current.add_transition(
+                        symbol,
+                        transition_to_state[next_transition]
+                    )
+
+        return na
+
+
+
 
 if __name__ == "__main__":
-    pass
+    GFG_nta = NTA()
+    GFG_nta.alphabet = {'a', 'b', 'x'}
+    i = NTA.State('i')
+    a = NTA.State('a')
+    a_prime = NTA.State('a_prime')
+    a_seconde = NTA.State('a_seconde')
+    b = NTA.State('b')
+    b_prime = NTA.State('b_prime')
+    b_seconde = NTA.State('b_seconde')
+    i.add_transition('x', a)
+    a.add_transition('b', i)
+    a.add_transition('a', a_prime)
+    a_prime.add_transition('x', a_seconde)
+    a_seconde.add_transition('b', b_prime)
+    a_seconde.add_transition('a', i, True)
+    i.add_transition('x', b)
+    b.add_transition('a', i)
+    b.add_transition('b', b_prime)
+    b_prime.add_transition('x', b_seconde)
+    b_seconde.add_transition('a', a_prime)
+    b_seconde.add_transition('b', i, True)
+    GFG_nta.add_state(i)
+    GFG_nta.add_state(a)
+    GFG_nta.add_state(a_prime)
+    GFG_nta.add_state(a_seconde)
+    GFG_nta.add_state(b)
+    GFG_nta.add_state(b_prime)
+    GFG_nta.add_state(b_seconde)
+    GFG_nta.complete()
+    GFG_na = GFG_nta.to_na()
+    GFG_na.__repr__()
+    print(f"GFG NTA has {GFG_nta.size()} states and {len(GFG_nta.get_transitions())} transitions.")
+    print(f"GFG NA has {GFG_na.size()} states and {len(GFG_na.get_transitions())} transitions.")

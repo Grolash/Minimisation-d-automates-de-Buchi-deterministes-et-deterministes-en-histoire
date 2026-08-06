@@ -24,6 +24,32 @@ class NA:
     def size(self):
         return len(self.states)
 
+    def completed(self):
+        for state in self.states:
+            for symbol in self.alphabet:
+                transitions = state.transitions.get(symbol, [])
+                if len(transitions) == 0:
+                    return False
+        return True
+
+    def complete(self):
+        if not self.completed():
+            dump_state = NA.State('dump')
+            self.add_state(dump_state)
+            for state in self.states:
+                for symbol in self.alphabet:
+                    transitions = state.transitions.get(symbol, [])
+                    if len(transitions) == 0:
+                        state.add_transition(symbol, dump_state)
+
+    def get_transitions(self):
+        transitions = []
+        for state in self.states:
+            for transitionlist in state.transitions.values():
+                for transition in transitionlist:
+                    transitions.append(transition)
+        return transitions
+
     def __str__(self):
         return str(self.states)
 
