@@ -95,36 +95,37 @@ class Game:
                     for a in self.na.alphabet:
                         p_primes = p.transitions.get(a, [])
                         for p_prime in p_primes:
-                            if p_prime.is_accepting:
-                                self.model.add(self.mu_variables[(p, q1, q2, a, "Eve")] >= self.mu_variables[
-                                    (p_prime, q1, q2, a, "Adam")]).only_enforce_if(
-                                    self.edge_variables[(p, q1, q2, a, "Eve", p_prime)]
-                                )
-                            elif q1.is_accepting or q2.is_accepting:
-                                self.model.add(self.mu_variables[(p, q1, q2, a, "Eve")] > self.mu_variables[
-                                    (p_prime, q1, q2, a, "Adam")]).only_enforce_if(
-                                    self.edge_variables[(p, q1, q2, a, "Eve", p_prime)]
-                                )
+                            if not p_prime.is_accepting:
+                                if q1.is_accepting or q2.is_accepting:
+                                    self.model.add(self.mu_variables[(p, q1, q2, a, "Eve")] > self.mu_variables[
+                                        (p_prime, q1, q2, a, "Adam")]).only_enforce_if(
+                                        self.edge_variables[(p, q1, q2, a, "Eve", p_prime)]
+                                    )
+                                else:
+                                    self.model.add(self.mu_variables[(p, q1, q2, a, "Eve")] >= self.mu_variables[
+                                        (p_prime, q1, q2, a, "Adam")]).only_enforce_if(
+                                        self.edge_variables[(p, q1, q2, a, "Eve", p_prime)]
+                                    )
 
                         q1_primes = q1.transitions.get(a, [])
                         q2_primes = q2.transitions.get(a, [])
                         for q1_prime in q1_primes:
                             for q2_prime in q2_primes:
-                                if p.is_accepting:
-                                    for b in self.na.alphabet:
-                                        self.model.add(self.mu_variables[(p, q1, q2, a, "Adam")] >=
-                                                       self.mu_variables[(p, q1_prime, q2_prime, b, "Eve")]
-                                                       ).only_enforce_if(
-                                            self.position_variables[(p, q1, q2, a, "Adam")],
-                                            self.position_variables[(p, q1_prime, q2_prime, b, "Eve")])
-
-                                elif q1_prime.is_accepting or q2_prime.is_accepting:
-                                    for b in self.na.alphabet:
-                                        self.model.add(self.mu_variables[(p, q1, q2, a, "Adam")] >
-                                                       self.mu_variables[(p, q1_prime, q2_prime, b, "Eve")]
-                                                       ).only_enforce_if(
-                                            self.position_variables[(p, q1, q2, a, "Adam")],
-                                            self.position_variables[(p, q1_prime, q2_prime, b, "Eve")])
+                                if not p.is_accepting:
+                                    if q1_prime.is_accepting or q2_prime.is_accepting:
+                                        for b in self.na.alphabet:
+                                            self.model.add(self.mu_variables[(p, q1, q2, a, "Adam")] >
+                                                           self.mu_variables[(p, q1_prime, q2_prime, b, "Eve")]
+                                                           ).only_enforce_if(
+                                                self.position_variables[(p, q1, q2, a, "Adam")],
+                                                self.position_variables[(p, q1_prime, q2_prime, b, "Eve")])
+                                    else:
+                                        for b in self.na.alphabet:
+                                            self.model.add(self.mu_variables[(p, q1, q2, a, "Adam")] >=
+                                                           self.mu_variables[(p, q1_prime, q2_prime, b, "Eve")]
+                                                           ).only_enforce_if(
+                                                self.position_variables[(p, q1, q2, a, "Adam")],
+                                                self.position_variables[(p, q1_prime, q2_prime, b, "Eve")])
 
 
     def solve(self):

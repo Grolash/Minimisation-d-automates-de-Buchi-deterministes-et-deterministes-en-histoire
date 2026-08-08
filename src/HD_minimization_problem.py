@@ -24,10 +24,13 @@ class HDMinimizationProblem:
 
         for q in self.candidate_na.states:
             for symbol in self.candidate_na.alphabet:
+                transitions = []
                 for q_prime in self.candidate_na.states:
-                    self.candidate_transitions[(q, symbol, q_prime)] = self.model.new_bool_var('')
+                    transition_var = self.model.new_bool_var('')
+                    self.candidate_transitions[(q, symbol, q_prime)] = transition_var
+                    transitions.append(transition_var)
+                self.model.add_at_least_one(transitions)
             self.candidate_states_acceptance[q] = self.model.new_bool_var('')
-        self.model.add_at_least_one(self.candidate_states_acceptance.values())
 
     def find_candidate_for_size(self, maxsize: int):
         self.init_candidate_na(maxsize)
@@ -62,27 +65,28 @@ class GameAB:
         self.position_variables = {}
         self.mu_variables = {}
         self.strategy_variables = {}
-        # self.adam_edge_variables = {}
+        self.adam_edge_variables = {}
 
         n = cand_na.size()
         for p in ref_na.states:
             for q in cand_na.states:
                 for a in ref_na.alphabet:
                     self.position_variables[(p, q, a, "Adam")] = self.model.new_bool_var('')
-                    self.mu_variables[(p, q, a, "Adam")] = self.model.new_int_var(0, n * n * n * len(ref_na.alphabet), '')
+                    self.mu_variables[(p, q, a, "Adam")] = self.model.new_int_var(0, n * n * len(ref_na.alphabet), '')
                     self.position_variables[(p, q, a, "Eve")] = self.model.new_bool_var('')
-                    self.mu_variables[(p, q, a, "Eve")] = self.model.new_int_var(0, n * n * n * len(ref_na.alphabet), '')
+                    self.mu_variables[(p, q, a, "Eve")] = self.model.new_int_var(0, n * n * len(ref_na.alphabet), '')
 
                     p_primes: list[NA.State] = p.transitions.get(a, [])
                     for p_prime in p_primes:
                         self.strategy_variables[(p, q, a, p_prime)] = self.model.new_bool_var('')
 
-                    """for q_prime in cand_na.states:
+                    for q_prime in cand_na.states:
                         for b in ref_na.alphabet:
-                            adam_eve_edge = self.model.new_bool_var('')
-                            self.adam_edge_variables[(p, q, a, "Adam", q_prime, b)] = adam_eve_edge
-                            self.model.add(adam_eve_edge == False).only_enforce_if(
-                                candidate_transitions[(q, a, q_prime)].Not())"""
+                            adam_edge_variable = self.model.new_bool_var('')
+                            self.adam_edge_variables[(p, q, a, q_prime, b)] = adam_edge_variable
+                            self.model.add(adam_edge_variable == False).only_enforce_if(
+                                self.candidate_transitions[(q, a, q_prime)].Not()
+                            )
 
 
     def eve_strategy(self):
@@ -106,16 +110,16 @@ class GameAB:
                             self.strategy_variables[(p, q, a, p_prime)]
                         )
 
-    """def adam_edges(self):
+    def adam_edges(self):
         for p in self.ref_na.states:
             for q in self.cand_na.states:
                 for a in self.ref_na.alphabet:
                     for q_prime in self.cand_na.states:
                         for b in self.ref_na.alphabet:
-                            self.model.add(self.adam_edge_variables[(p, q, a, "Adam", q_prime, b)] == True).only_enforce_if(
+                            self.model.add(self.adam_edge_variables[(p, q, a, q_prime, b)] == True).only_enforce_if(
                                 self.position_variables[(p, q, a, "Adam")],
                                 self.candidate_transitions[(q, a, q_prime)]
-                            )"""
+                            )
 
     def adam_eve_sequence(self):
         start_state_ref = self.ref_na.states[0]
@@ -130,18 +134,7 @@ class GameAB:
                         for b in self.ref_na.alphabet:
                             position_variable = self.position_variables[(p, q_prime, b, "Eve")]
                             self.model.add(position_variable == True).only_enforce_if(
-                                self.position_variables[(p, q, a, "Adam")],
-                                self.candidate_transitions[(q, a, q_prime)]
-                                # Actually, no need for Adam-Eve edges because
-                                # transitions variables check the same thing
-                                # in the non-generic encoding?
-                            )
-                            self.model.add(position_variable == False).only_enforce_if(
-                                self.candidate_transitions[(q, a, q_prime)].Not()
-                                # Still need an iff tho. Contrary to other constraints
-                                # that only make the solver shoot itself in the foot if variables are set to true
-                                # when not enforced, this one would create wrong solutions if they could
-                                # be set to true when not enforced.
+                                self.adam_edge_variables[(p, q, a, q_prime, b)]
                             )
 
     def mu_condition(self):
@@ -150,44 +143,43 @@ class GameAB:
                 for a in self.ref_na.alphabet:
                     p_primes = p.transitions.get(a, [])
                     for p_prime in p_primes:
-                        if p_prime.is_accepting: # rank 2
+                        if not p_prime.is_accepting: # rank != 0
+                            self.model.add(self.mu_variables[(p, q, a, "Eve")] >
+                                           self.mu_variables[(p_prime, q, a, "Adam")]
+                                           ).only_enforce_if(
+                                self.strategy_variables[(p, q, a, p_prime)],
+                                self.candidate_states_acceptance[q]  # rank 1 depends on a variable in this case
+                            )
+
                             self.model.add(self.mu_variables[(p, q, a, "Eve")] >=
                                            self.mu_variables[(p_prime, q, a, "Adam")]
                                            ).only_enforce_if(
                                 self.strategy_variables[(p, q, a, p_prime)],
+                                self.candidate_states_acceptance[q].Not() # rank 2 only if neither accepting
                             )
-                        else: # rank != 2
-                            self.model.add(self.mu_variables[(p, q, a, "Eve")] >
-                                           self.mu_variables[(p_prime, q, a, "Adam")]
-                                           ).only_enforce_if(
-                                    self.strategy_variables[(p, q, a, p_prime)],
-                                    self.candidate_states_acceptance[q] # rank 1 depends on a variable in this case
-                                )
-
                     for q_prime in self.cand_na.states:
-                        if p.is_accepting:
-                            for b in self.ref_na.alphabet:
-                                self.model.add(self.mu_variables[(p, q, a, "Adam")] >=
-                                               self.mu_variables[(p, q_prime, b, "Eve")]
-                                               ).only_enforce_if(
-                                    self.position_variables[(p, q, a, "Adam")],
-                                    self.position_variables[(p, q_prime, b, "Eve")],
-                                    self.candidate_transitions[(q, a, q_prime)]
-                                    )
-                        else:
+                        if not p.is_accepting:
                             for b in self.ref_na.alphabet:
                                 self.model.add(self.mu_variables[(p, q, a, "Adam")] >
                                                self.mu_variables[(p, q_prime, b, "Eve")]
                                                ).only_enforce_if(
-                                    self.position_variables[(p, q, a, "Adam")],
-                                    self.position_variables[(p, q_prime, b, "Eve")],
-                                    self.candidate_transitions[(q, a, q_prime)],
-                                    self.candidate_states_acceptance[q]
+                                    self.adam_edge_variables[(p, q, a, q_prime, b)],
+                                    self.candidate_states_acceptance[q_prime]
                                     )
+
+                            for b in self.ref_na.alphabet:
+                                self.model.add(self.mu_variables[(p, q, a, "Adam")] >=
+                                               self.mu_variables[(p, q_prime, b, "Eve")]
+                                               ).only_enforce_if(
+                                    self.adam_edge_variables[(p, q, a, q_prime, b)],
+                                    self.candidate_states_acceptance[q_prime].Not()
+                                    )
+
 
     def encode(self):
         self.eve_strategy()
         self.eve_adam_sequence()
+        self.adam_edges()
         self.adam_eve_sequence()
         self.mu_condition()
 
@@ -207,9 +199,9 @@ class GameBA:
             for q in ref_na.states:
                 for a in cand_na.alphabet:
                     self.position_variables[(p, q, a, "Adam")] = self.model.new_bool_var('')
-                    self.mu_variables[(p, q, a, "Adam")] = self.model.new_int_var(0, n * n * n * len(cand_na.alphabet), '')
+                    self.mu_variables[(p, q, a, "Adam")] = self.model.new_int_var(0, n * n * len(cand_na.alphabet), '')
                     self.position_variables[(p, q, a, "Eve")] = self.model.new_bool_var('')
-                    self.mu_variables[(p, q, a, "Eve")] = self.model.new_int_var(0, n * n * n * len(cand_na.alphabet), '')
+                    self.mu_variables[(p, q, a, "Eve")] = self.model.new_int_var(0, n * n * len(cand_na.alphabet), '')
 
                     for p_prime in cand_na.states:
                         strategy_variable = self.model.new_bool_var('')
@@ -217,8 +209,6 @@ class GameBA:
                         self.model.add(strategy_variable == False).only_enforce_if(
                             self.candidate_transitions[(p, a, p_prime)].Not()
                             # Can't be true if no transition from p to p_prime.
-                            # Here we still need an edge (strategy) variable because not all possible edges
-                            # are chosen by Eve, only one of them
                         )
 
     def eve_strategy(self):
@@ -254,7 +244,9 @@ class GameBA:
                         for b in self.cand_na.alphabet:
                             position_variable = self.position_variables[(p, q_prime, b, "Eve")]
                             self.model.add(position_variable == True).only_enforce_if(
-                                self.position_variables[(p, q, a, "Adam")], # Adam follows every edge
+                                self.position_variables[(p, q, a, "Adam")],
+                                # Adam follows every edge,
+                                # and here the transitions are known, so the edges are known
                             )
 
     def mu_condition(self):
@@ -262,12 +254,6 @@ class GameBA:
             for q in self.ref_na.states:
                 for a in self.cand_na.alphabet:
                     for p_prime in self.cand_na.states:
-                        self.model.add(self.mu_variables[(p, q, a, "Eve")] >=
-                                       self.mu_variables[(p_prime, q, a, "Adam")]
-                                       ).only_enforce_if(
-                            self.strategy_variables[(p, q, a, p_prime)],
-                            self.candidate_states_acceptance[p_prime] # rank 2 depends on a variable in this case
-                        )
                         if q.is_accepting:
                             self.model.add(self.mu_variables[(p, q, a, "Eve")] >
                                            self.mu_variables[(p_prime, q, a, "Adam")]
@@ -275,24 +261,33 @@ class GameBA:
                                 self.strategy_variables[(p, q, a, p_prime)],
                                 self.candidate_states_acceptance[p_prime].Not() # rank 1 only if p is not accepting
                             )
+                        else:
+                            self.model.add(self.mu_variables[(p, q, a, "Eve")] >=
+                                           self.mu_variables[(p_prime, q, a, "Adam")]
+                                           ).only_enforce_if(
+                                self.strategy_variables[(p, q, a, p_prime)],
+                                self.candidate_states_acceptance[p_prime].Not()
+                            )
 
                     q_primes = q.transitions.get(a, [])
                     for q_prime in q_primes:
                         for b in self.cand_na.alphabet:
-                            self.model.add(self.mu_variables[(p, q, a, "Adam")] >=
-                                           self.mu_variables[(p, q_prime, b, "Eve")]
-                                           ).only_enforce_if(
-                                self.position_variables[(p, q, a, "Adam")],
-                                self.position_variables[(p, q_prime, b, "Eve")],
-                                self.candidate_states_acceptance[p] # rank 2 idem
-                            )
                             if q_prime.is_accepting:
                                 self.model.add(self.mu_variables[(p, q, a, "Adam")] >
-                                               self.mu_variables[(p, q_prime, a, "Eve")]
+                                               self.mu_variables[(p, q_prime, b, "Eve")]
                                                ).only_enforce_if(
                                     self.position_variables[(p, q, a, "Adam")],
-                                    self.position_variables[(p, q_prime, a, "Eve")],
+                                    self.position_variables[(p, q_prime, b, "Eve")],
                                     self.candidate_states_acceptance[p].Not() # rank 1 idem
+                                )
+                            else:
+                                self.model.add(self.mu_variables[(p, q, a, "Adam")] >=
+                                               self.mu_variables[(p, q_prime, b, "Eve")]
+                                               ).only_enforce_if(
+                                    self.position_variables[(p, q, a, "Adam")],
+                                    self.position_variables[(p, q_prime, b, "Eve")],
+                                    # ok because q -a-> q_prime in Delta is known
+                                    self.candidate_states_acceptance[p].Not()  # rank 2 idem
                                 )
 
     def encode(self):
@@ -310,33 +305,46 @@ class GameG2:
         self.position_variables = {}
         self.mu_variables = {}
         self.strategy_variables = {}
+        self.adam_edge_variables = {}
 
         n = cand_na.size()
         for p in cand_na.states:
-            for q_1 in cand_na.states:
-                for q_2 in cand_na.states:
+            for q1 in cand_na.states:
+                for q2 in cand_na.states:
                     for a in cand_na.alphabet:
-                        self.position_variables[(p, q_1, q_2, a, "Adam")] = self.model.new_bool_var('')
-                        self.mu_variables[(p, q_1, q_2, a, "Adam")] = self.model.new_int_var(0, n * n * n * len(cand_na.alphabet), '')
-                        self.position_variables[(p, q_1, q_2, a, "Eve")] = self.model.new_bool_var('')
-                        self.mu_variables[(p, q_1, q_2, a, "Eve")] = self.model.new_int_var(0, n * n * n * len(cand_na.alphabet), '')
+                        self.position_variables[(p, q1, q2, a, "Adam")] = self.model.new_bool_var('')
+                        self.mu_variables[(p, q1, q2, a, "Adam")] = self.model.new_int_var(0, n * n * n * len(cand_na.alphabet), '')
+                        self.position_variables[(p, q1, q2, a, "Eve")] = self.model.new_bool_var('')
+                        self.mu_variables[(p, q1, q2, a, "Eve")] = self.model.new_int_var(0, n * n * n * len(cand_na.alphabet), '')
                         for p_prime in cand_na.states:
                             strategy_variable = self.model.new_bool_var('')
-                            self.strategy_variables[(p, q_1, q_2, a, p_prime)] = strategy_variable
+                            self.strategy_variables[(p, q1, q2, a, p_prime)] = strategy_variable
                             self.model.add(strategy_variable == False).only_enforce_if(
                                 self.candidate_transitions[(p, a, p_prime)].Not()
                                 # Can't be true if no transition from p to p_prime, same as in GameBA
                             )
+                        for q1_prime in cand_na.states:
+                            for q2_prime in cand_na.states:
+                                for b in cand_na.alphabet:
+                                    adam_edge_variable = self.model.new_bool_var('')
+                                    self.adam_edge_variables[(p, q1, q2, a, q1_prime, q2_prime, b)] = adam_edge_variable
+                                    self.model.add(adam_edge_variable == False).only_enforce_if(
+                                        self.candidate_transitions[(q1, a, q1_prime)].Not()
+                                    )
+                                    self.model.add(adam_edge_variable == False).only_enforce_if(
+                                        self.candidate_transitions[(q2, a, q2_prime)].Not()
+                                    )
+
 
     def eve_strategy(self):
         for p in self.cand_na.states:
-            for q_1 in self.cand_na.states:
-                for q_2 in self.cand_na.states:
+            for q1 in self.cand_na.states:
+                for q2 in self.cand_na.states:
                     for a in self.cand_na.alphabet:
-                        strategy_variables = [self.strategy_variables[(p, q_1, q_2, a, p_prime)] for p_prime in
+                        strategy_variables = [self.strategy_variables[(p, q1, q2, a, p_prime)] for p_prime in
                                               self.cand_na.states]
                         self.model.add_exactly_one(strategy_variables).only_enforce_if(
-                            self.position_variables[(p, q_1, q_2, a, "Eve")],
+                            self.position_variables[(p, q1, q2, a, "Eve")],
                         )
 
     def eve_adam_sequence(self):
@@ -348,6 +356,21 @@ class GameG2:
                             self.model.add(self.position_variables[(p_prime, q1, q2, a, "Adam")] == True).only_enforce_if(
                                 self.strategy_variables[(p, q1, q2, a, p_prime)]
                             )
+
+    def adam_eve_edges(self):
+        for p in self.cand_na.states:
+            for q1 in self.cand_na.states:
+                for q2 in self.cand_na.states:
+                    for a in self.cand_na.alphabet:
+                        for q1_prime in self.cand_na.states:
+                            for q2_prime in self.cand_na.states:
+                                for b in self.cand_na.alphabet:
+                                    edge_variable = self.adam_edge_variables[(p, q1, q2, a, q1_prime, q2_prime, b)]
+                                    self.model.add(edge_variable == True).only_enforce_if(
+                                        self.position_variables[(p, q1, q2, a, "Adam")],
+                                        self.candidate_transitions[(q1, a, q1_prime)],
+                                        self.candidate_transitions[(q2, a, q2_prime)]
+                                    )
 
     def adam_eve_sequence(self):
         start_state = self.cand_na.states[0]
@@ -363,15 +386,7 @@ class GameG2:
                                 for b in self.cand_na.alphabet:
                                     position_variable = self.position_variables[(p, q1_prime, q2_prime, b, "Eve")]
                                     self.model.add(position_variable == True).only_enforce_if(
-                                        self.position_variables[(p, q1, q2, a, "Adam")],
-                                        self.candidate_transitions[(q1, a, q1_prime)],
-                                        self.candidate_transitions[(q2, a, q2_prime)]
-                                    )
-                                    self.model.add(position_variable == False).only_enforce_if(
-                                        self.candidate_transitions[(q1, a, q1_prime)].Not()
-                                    )
-                                    self.model.add(position_variable == False).only_enforce_if(
-                                        self.candidate_transitions[(q2, a, q2_prime)].Not()
+                                        self.adam_edge_variables[(p, q1, q2, a, q1_prime, q2_prime, b)]
                                     )
 
     def mu_condition(self):
@@ -380,13 +395,6 @@ class GameG2:
                 for q2 in self.cand_na.states:
                     for a in self.cand_na.alphabet:
                         for p_prime in self.cand_na.states:
-                            self.model.add(self.mu_variables[(p, q1, q2, a, "Eve")] >=
-                                           self.mu_variables[(p_prime, q1, q2, a, "Adam")]
-                                           ).only_enforce_if(
-                                self.strategy_variables[(p, q1, q2, a, p_prime)],
-                                self.candidate_states_acceptance[p_prime]
-                                # rank 2 depends on a variable in this case
-                            )
                             q1_or_q2 = self.model.new_bool_var('')
                             self.model.add_bool_or(self.candidate_states_acceptance[q1],
                                                    self.candidate_states_acceptance[q2]
@@ -408,19 +416,18 @@ class GameG2:
                                 self.candidate_states_acceptance[p_prime].Not(),
                                 q1_or_q2
                             )
+                            self.model.add(self.mu_variables[(p, q1, q2, a, "Eve")] >=
+                                           self.mu_variables[(p_prime, q1, q2, a, "Adam")]
+                                           ).only_enforce_if(
+                                self.strategy_variables[(p, q1, q2, a, p_prime)],
+                                self.candidate_states_acceptance[p_prime].Not(),
+                                q1_or_q2.Not()
+                                # rank 2 depends on a variable in this case
+                            )
 
                         for q1_prime in self.cand_na.states:
                             for q2_prime in self.cand_na.states:
                                 for b in self.cand_na.alphabet:
-                                    self.model.add(self.mu_variables[(p, q1, q2, a, "Adam")] >=
-                                                   self.mu_variables[(p, q1_prime, q2_prime, b, "Eve")]
-                                                   ).only_enforce_if(
-                                        self.position_variables[(p, q1, q2, a, "Adam")],
-                                        self.position_variables[(p, q1_prime, q2_prime, b, "Eve")],
-                                        self.candidate_transitions[(q1, a, q1_prime)],
-                                        self.candidate_transitions[(q2, a, q2_prime)],
-                                        self.candidate_states_acceptance[p]
-                                    )
                                     q1_prime_or_q2_prime = self.model.new_bool_var('')
                                     self.model.add_bool_or(self.candidate_states_acceptance[q1_prime],
                                                            self.candidate_states_acceptance[q2_prime]
@@ -435,17 +442,22 @@ class GameG2:
                                     self.model.add(self.mu_variables[(p, q1, q2, a, "Adam")] >
                                                    self.mu_variables[(p, q1_prime, q2_prime, b, "Eve")]
                                                    ).only_enforce_if(
-                                        self.position_variables[(p, q1, q2, a, "Adam")],
-                                        self.position_variables[(p, q1_prime, q2_prime, b, "Eve")],
-                                        self.candidate_transitions[(q1, a, q1_prime)],
-                                        self.candidate_transitions[(q2, a, q2_prime)],
+                                        self.adam_edge_variables[(p, q1, q2, a, q1_prime, q2_prime, b)],
                                         self.candidate_states_acceptance[p].Not(),
                                         q1_prime_or_q2_prime
+                                    )
+                                    self.model.add(self.mu_variables[(p, q1, q2, a, "Adam")] >=
+                                                   self.mu_variables[(p, q1_prime, q2_prime, b, "Eve")]
+                                                   ).only_enforce_if(
+                                        self.adam_edge_variables[(p, q1, q2, a, q1_prime, q2_prime, b)],
+                                        self.candidate_states_acceptance[p],
+                                        q1_prime_or_q2_prime.Not()
                                     )
 
     def encode(self):
         self.eve_strategy()
         self.eve_adam_sequence()
+        self.adam_eve_edges()
         self.adam_eve_sequence()
         self.mu_condition()
 
@@ -453,7 +465,8 @@ class GameG2:
 if __name__ == '__main__':
     from nta import NTA
 
-    GFG_nta = NTA()
+    # too big...
+    """GFG_nta = NTA()
     GFG_nta.alphabet = {'a', 'b', 'x'}
     i = NTA.State('i')
     a = NTA.State('a')
@@ -486,7 +499,64 @@ if __name__ == '__main__':
 
     print("GFG NA:")
     game = HDMinimizationProblem(GFG_na)
-    game.find_candidate_for_size(GFG_na.size()-1)
+    game.find_candidate_for_size(GFG_na.size()-1)"""
+
+    fake_na = NA()  # actually deterministic but deterministic means HD
+    print("Fake NA")
+    q0 = NA.State('q0')
+    q0.is_accepting = True
+    q1 = NA.State('q1')
+    q1.is_accepting = True
+    q2 = NA.State('q2')
+    q3 = NA.State('q3')
+
+    fake_na.alphabet = {'a', 'b'}
+
+    q0.add_transition('a', q1)
+    q0.add_transition('b', q2)
+    q1.add_transition('a', q3)
+    q1.add_transition('b', q0)
+    q2.add_transition('a', q1)
+    q2.add_transition('b', q2)
+    q3.add_transition('a', q3)
+    q3.add_transition('b', q0)
+    fake_na.add_state(q0)
+    fake_na.add_state(q1)
+    fake_na.add_state(q2)
+    fake_na.add_state(q3)
+    fake_na.complete()
+    fake_na.__repr__()
+    print("Candidate NA:")
+    game = HDMinimizationProblem(fake_na)
+    game.find_candidate_for_size(fake_na.size()-1)
+
+    print("------------------------------")
+
+    non_hd_na = NA()
+    print("Non-HD NA")
+    p = NA.State('p')
+    q = NA.State('q')
+    q.is_accepting = True
+    dump = NA.State('dump')
+    non_hd_na.alphabet = {'a', 'b'}
+
+    p.add_transition('a', p)
+    p.add_transition('b', p)
+    p.add_transition('a', q)
+    p.add_transition('b', q)
+    q.add_transition('a', q)
+    q.add_transition('b', dump)
+    dump.add_transition('a', dump)
+    dump.add_transition('b', dump)
+    non_hd_na.add_state(p)
+    non_hd_na.add_state(q)
+    non_hd_na.add_state(dump)
+    non_hd_na.complete()
+
+    print("Candidate NA:")
+    game1 = HDMinimizationProblem(non_hd_na)
+    game1.find_candidate_for_size(non_hd_na.size())
+
 
 
 
