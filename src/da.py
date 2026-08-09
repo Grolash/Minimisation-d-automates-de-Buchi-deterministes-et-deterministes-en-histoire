@@ -1,8 +1,8 @@
-class Automaton:
+class DA:
     class State:
         def __init__(self, id: str):
             self.id : str = id
-            self.transitions : dict[str, Automaton.State] = {}
+            self.transitions : dict[str, DA.State] = {}
             self.is_accepting : bool = False
 
         def add_transition(self, symbol: str, target):
@@ -12,7 +12,7 @@ class Automaton:
             return self.id
 
     def __init__(self):
-        self.states : list[Automaton.State] = []
+        self.states : list[DA.State] = []
         self.alphabet : set[str] = set()
 
     def add_state(self, state: State):
@@ -32,11 +32,11 @@ class Automaton:
 
 
 if __name__ == "__main__":
-    reference_automaton = Automaton()
-    q0 = Automaton.State('q0')
-    q1 = Automaton.State('q1')
-    q2 = Automaton.State('q2')
-    q3 = Automaton.State('q3')
+    reference_automaton = DA()
+    q0 = DA.State('q0')
+    q1 = DA.State('q1')
+    q2 = DA.State('q2')
+    q3 = DA.State('q3')
     q0.is_accepting = True
     q1.is_accepting = True
     q0.add_transition('a', q1)

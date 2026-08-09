@@ -5,7 +5,7 @@ from itertools import combinations
 
 from ortools.sat.python.cp_model import OPTIMAL
 
-from tga import TGA
+from dtga import DTGA
 
 
 def powerset(s):
@@ -13,9 +13,9 @@ def powerset(s):
 
 
 class TGBuchiMinimizationProblem:
-    def __init__(self, reference_tga: TGA, maxsize: int, maxsets: int, deterministic: bool = True):
+    def __init__(self, reference_tga: DTGA, maxsize: int, maxsets: int, deterministic: bool = True):
         self.reference_tga = reference_tga
-        self.candidate_tga = TGA()
+        self.candidate_tga = DTGA()
         self.deterministic = deterministic
         self.model = cp_model.CpModel()
         self.size = maxsize  # |Q_c| = n
@@ -28,7 +28,7 @@ class TGBuchiMinimizationProblem:
         self.f_primes = powerset(self.f_r)
 
         for i in range(maxsize):
-            state = TGA.State(f'q{i}')
+            state = DTGA.State(f'q{i}')
             self.candidate_tga.add_state(state)
 
         self.candidate_transitions = {}
@@ -194,7 +194,7 @@ class TGBuchiMinimizationProblem:
         else:
             print("No solution found")
 
-def find_minimal_solution(reference_tga: TGA, deterministic: bool = True):
+def find_minimal_solution(reference_tga: DTGA, deterministic: bool = True):
     print("Original automaton size: ", reference_tga.size(), "; original number of acceptance sets: ", reference_tga.num_acceptance_sets)
     maxsize = reference_tga.size()-1
     maxsets = reference_tga.num_acceptance_sets
@@ -204,7 +204,7 @@ def find_minimal_solution(reference_tga: TGA, deterministic: bool = True):
     else:
         print("No solution found")
 
-def solve_for(reference_tga: TGA, maxsize, maxsets, deterministic: bool = True):
+def solve_for(reference_tga: DTGA, maxsize, maxsets, deterministic: bool = True):
     if maxsize >= 1:
         print("Solving for size: ", maxsize, "; number of acceptance sets: ", maxsets)
         problem = TGBuchiMinimizationProblem(reference_tga, maxsize, maxsets, deterministic)
@@ -227,9 +227,9 @@ def solve_for(reference_tga: TGA, maxsize, maxsets, deterministic: bool = True):
 
 
 if __name__ == '__main__':
-    reference_tga = TGA(2)
-    q0 = TGA.State('q0')
-    q1 = TGA.State('q1')
+    reference_tga = DTGA(2)
+    q0 = DTGA.State('q0')
+    q1 = DTGA.State('q1')
     q0.add_transition('a', q1, acceptance_sets={0,1})
     q1.add_transition('b', q0, acceptance_sets={0,1})
     q0.add_transition('b', q0, acceptance_sets={0})

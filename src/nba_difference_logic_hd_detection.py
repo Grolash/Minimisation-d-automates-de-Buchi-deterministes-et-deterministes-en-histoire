@@ -95,13 +95,13 @@ class Game:
                     for a in self.na.alphabet:
                         p_primes = p.transitions.get(a, [])
                         for p_prime in p_primes:
-                            if not p_prime.is_accepting:
-                                if q1.is_accepting or q2.is_accepting:
+                            if not p_prime.is_accepting: # rank != 0
+                                if q1.is_accepting or q2.is_accepting: # rank = 1
                                     self.model.add(self.mu_variables[(p, q1, q2, a, "Eve")] > self.mu_variables[
                                         (p_prime, q1, q2, a, "Adam")]).only_enforce_if(
                                         self.edge_variables[(p, q1, q2, a, "Eve", p_prime)]
                                     )
-                                else:
+                                else: # rank = 2
                                     self.model.add(self.mu_variables[(p, q1, q2, a, "Eve")] >= self.mu_variables[
                                         (p_prime, q1, q2, a, "Adam")]).only_enforce_if(
                                         self.edge_variables[(p, q1, q2, a, "Eve", p_prime)]

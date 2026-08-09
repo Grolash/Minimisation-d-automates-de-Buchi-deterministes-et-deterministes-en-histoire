@@ -1,4 +1,4 @@
-class TGA:
+class DTGA:
     class Transition:
         def __init__(self, source, symbol: str, target, acceptance_sets: set[int] = None):
             self.source = source # TGA.State
@@ -14,10 +14,10 @@ class TGA:
     class State:
         def __init__(self, id: str):
             self.id = id
-            self.transitions : dict[str, TGA.Transition] = {}
+            self.transitions : dict[str, DTGA.Transition] = {}
 
         def add_transition(self, symbol: str, target, acceptance_sets: set[int] = None):
-            transition = TGA.Transition(self, symbol, target, acceptance_sets)
+            transition = DTGA.Transition(self, symbol, target, acceptance_sets)
             self.transitions.update({symbol: transition})
 
         def successors(self):
@@ -27,7 +27,7 @@ class TGA:
             return self.id
 
     def __init__(self, num_acceptance_sets: int = 1):
-        self.states : list[TGA.State] = []
+        self.states : list[DTGA.State] = []
         self.alphabet : set[str] = set()
         self.num_acceptance_sets : int = num_acceptance_sets
 

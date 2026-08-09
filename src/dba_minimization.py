@@ -1,18 +1,18 @@
 from ortools.sat.python import cp_model
 
-from automaton import Automaton
+from da import DA
 
 class BuchiMinimizationProblem:
-    def __init__(self, reference_automaton : Automaton, maxsize : int, deterministic : bool = False):
+    def __init__(self, reference_automaton : DA, maxsize : int, deterministic : bool = False):
         self.reference_automaton = reference_automaton
-        self.candidate_automaton = Automaton()
+        self.candidate_automaton = DA()
         self.deterministic = deterministic
         self.alphabet = reference_automaton.alphabet
         self.model = cp_model.CpModel()
         self.size = maxsize
 
         for i in range(maxsize):
-            state = Automaton.State(f'q{i}')
+            state = DA.State(f'q{i}')
             self.candidate_automaton.add_state(state)
 
         self.candidate_transitions = {}
@@ -141,7 +141,7 @@ class BuchiMinimizationProblem:
             print("No solution found")
 
 
-def find_minimal_solution(reference_automaton : Automaton):
+def find_minimal_solution(reference_automaton : DA):
     print("Original automaton size: ", reference_automaton.size(), "")
     solution_exists, problem = solve_for(reference_automaton, reference_automaton.size()-1)
     if solution_exists:
@@ -151,7 +151,7 @@ def find_minimal_solution(reference_automaton : Automaton):
 
 
 
-def solve_for(reference_automaton : Automaton, size : int):
+def solve_for(reference_automaton : DA, size : int):
     if size >= 1:
         print("Solving for size: ", size, "")
         problem = BuchiMinimizationProblem(reference_automaton, size)
@@ -174,11 +174,11 @@ def solve_for(reference_automaton : Automaton, size : int):
 
 
 if __name__ == "__main__":
-    reference_automaton = Automaton()
-    q0 = Automaton.State('q0')
-    q1 = Automaton.State('q1')
-    q2 = Automaton.State('q2')
-    q3 = Automaton.State('q3')
+    reference_automaton = DA()
+    q0 = DA.State('q0')
+    q1 = DA.State('q1')
+    q2 = DA.State('q2')
+    q3 = DA.State('q3')
     q0.is_accepting = True
     q1.is_accepting = True
     q0.add_transition('a', q1)
